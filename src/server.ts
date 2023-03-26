@@ -4,7 +4,12 @@ import { Server } from "socket.io";
 const port = 9001;
 const publishedPatchMap: LRUMap<string, boolean> = new LRUMap<string, boolean>(10000);
 
-const io = new Server();
+// Source: https://socket.io/docs/v4/handling-cors
+const io = new Server({
+  cors: {
+    origin: "http://localhost:5173",
+  },
+});
 
 io.on("connection", socket => {
   console.log(`Client ${socket.id} connected`);
@@ -37,24 +42,27 @@ io.on("connection", socket => {
     }
   });
 
-  socket.on("patch", (data: { workspaceId: string, documentId: string, patchId: string, patches: any }, ack?: (success: boolean) => void) => {
-    if (typeof data?.patchId === "string" && typeof data?.workspaceId === "string") {
-      if (!publishedPatchMap.has(data.patchId)) {
-        publishedPatchMap.set(data.patchId, true);
-        socket.to(data.workspaceId).emit("patch", data);
-        console.log(`Emitting patch ${data.patchId} to workspace ${data.workspaceId}`);
-        if (ack) {
-          ack(true);
+  socket.on(
+    "patch",
+    (data: { workspaceId: string; documentId: string; patchId: string; patches: any }, ack?: (success: boolean) => void) => {
+      if (typeof data?.patchId === "string" && typeof data?.workspaceId === "string") {
+        if (!publishedPatchMap.has(data.patchId)) {
+          publishedPatchMap.set(data.patchId, true);
+          socket.to(data.workspaceId).emit("patch", data);
+          console.log(`Emitting patch ${data.patchId} to workspace ${data.workspaceId}`);
+          if (ack) {
+            ack(true);
+          }
+          return;
+        } else {
+          console.log(`Skipping duplicate patch ${data.patchId}`);
         }
-        return;
-      } else {
-        console.log(`Skipping duplicate patch ${data.patchId}`);
+      }
+      if (ack) {
+        ack(false);
       }
     }
-    if (ack) {
-      ack(false);
-    }
-  });
+  );
 });
 
 io.on("disconnect", socket => {
